@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>川の船 合成速度 3Dシミュレーター v4</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --panel-bg:rgba(8,12,24,0.97);
+    --line:rgba(80,160,255,0.15);
+    --accent:#39b8ff;
+    --river:#00c8ff;
+    --boat:#ff9800;
+    --res:#69f0ae;
+    --trail:#ff4081;
+  }
+  body{
+    font-family:'Segoe UI','Hiragino Sans','Meiryo',sans-serif;
+    background:#000;
+    color:#fff;
+    overflow:hidden;
+    display:flex;
+    height:100vh;
+  }
+  #canvas-container{flex:1;position:relative;min-width:0;}
+  canvas{display:block;width:100%;height:100%;}
+  #panel{
+    width:390px;
+    background:var(--panel-bg);
+    border-left:1px solid var(--line);
+    overflow-y:auto;
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    scrollbar-width:thin;
+    scrollbar-color:#1a2a4a transparent;
+  }
+  #panel::-webkit-scrollbar{width:6px;}
+  #panel::-webkit-scrollbar-thumb{background:#1a2a4a;border-radius:3px;}
+  .sticky-head{
+    position:sticky;
+    top:-16px;
+    z-index:20;
+    background:linear-gradient(180deg,rgba(8,12,24,0.98),rgba(8,12,24,0.92));
+    padding:16px 0 10px;
+    backdrop-filter:blur(8px);
+  }
+  .ptitle{
+    font-size:17px;
+    font-weight:800;
+    text-align:center;
+    padding:2px 0 10px;
+    background:linear-gradient(135deg,#00d2ff,#3a7bd5);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    border-bottom:1px solid var(--line);
+  }
+  .mode-caption{
+    text-align:center;
+    font-size:10px;
+    color:#79a8d2;
+    margin-top:5px;
+    letter-spacing:0.6px;
+  }
+  .mode-toggle{
+    display:flex;
+    border-radius:12px;
+    overflow:hidden;
+    border:2px solid rgba(80,160,255,0.42);
+    gap:2px;
+    background:rgba(0,0,0,0.28);
+    margin-top:10px;
+  }
+  .mode-btn,.dir-btn{
+    flex:1;
+    padding:14px 8px;
+    text-align:center;
+    background:rgba(20,35,60,0.95);
+    border:none;
+    color:#8899bb;
+    font-size:15px;
+    font-weight:800;
+    cursor:pointer;
+    transition:all .25s ease;
+    letter-spacing:0.4px;
+  }
+  .dir-btn{padding:7px;font-size:12px;}
+  .mode-btn.active,.dir-btn.active{
+    background:linear-gradient(135deg,#1a55aa,#2277cc);
+    color:#fff;
+    box-shadow:0 0 16px rgba(40,120,255,0.35), inset 0 1px 0 rgba(255,255,255,0.14);
+  }
+  .mode-btn:hover:not(.active),.dir-btn:hover:not(.active){
+    background:rgba(50,70,100,0.95);
+    color:#c8d8ef;
+  }
+  .cg{
+    background:rgba(15,22,40,0.7);
+    border:1px solid rgba(80,160,255,0.08);
+    border-radius:10px;
+    padding:12px;
+  }
+  .cg h3{
+    font-size:11px;
+    color:#5c8fc4;
+    margin-bottom:8px;
+    text-transform:uppercase;
+    letter-spacing:1.5px;
+  }
+  .sr{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+  .sr label{min-width:92px;font-size:12px;color:#96a8c3;}
+  .sr input[type=range]{
+    flex:1;height:5px;-webkit-appearance:none;background:rgba(40,60,100,0.5);
+    border-radius:3px;outline:none;
+  }
+  .sr input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:14px;height:14px;border-radius:50%;cursor:pointer;border:2px solid #fff;
+  }
+  .sl-r::-webkit-slider-thumb{background:#00bcd4;}
+  .sl-b::-webkit-slider-thumb{background:#ff9800;}
+  .sl-a::-webkit-slider-thumb{background:#e91e63;}
+  .sl-w::-webkit-slider-thumb{background:#66bb6a;}
+  .sr .v{min-width:62px;text-align:right;font-size:12px;font-weight:700;font-family:Consolas,monospace;}
+  .speed-bar-wrap{
+    margin-top:4px;height:6px;background:rgba(0,0,0,0.28);
+    border-radius:4px;overflow:hidden;
+  }
+  .speed-bar{height:100%;border-radius:4px;transition:width .25s,background .25s;}
+  .dir-ind{
+    text-align:center;padding:7px 8px;background:rgba(15,22,40,0.55);
+    border-radius:8px;font-size:11px;color:#70a0cf;border:1px solid rgba(80,160,255,0.08);line-height:1.6;
+  }
+  .dir-ind .ar{font-size:16px;display:block;margin:2px 0;letter-spacing:2px;}
+  .planar-info{
+    background:rgba(15,10,30,0.7);
+    border:1px solid rgba(200,100,255,0.15);
+    border-radius:10px;
+    padding:10px;
+    font-size:11px;
+    line-height:1.75;
+    color:#c39be8;
+  }
+  .timer-box{
+    background:rgba(40,10,10,0.4);
+    border:1px solid rgba(255,100,50,0.25);
+    border-radius:10px;padding:10px;text-align:center;
+  }
+  .timer-box .time{
+    font-size:28px;font-weight:800;font-family:Consolas,monospace;
+    color:#ff9800;text-shadow:0 0 10px rgba(255,150,0,0.3);
+  }
+  .timer-box .tlabel{font-size:10px;color:#c5905d;text-transform:uppercase;letter-spacing:1px;}
+  .btn-row{display:flex;gap:8px;}
+  .btn{
+    flex:1;padding:12px;border:none;border-radius:10px;font-size:14px;font-weight:800;
+    cursor:pointer;transition:all .25s ease;
+  }
+  .btn-play{
+    background:linear-gradient(135deg,#1b7a20,#2eaa35);
+    color:#fff;box-shadow:0 2px 8px rgba(40,160,40,0.3);
+  }
+  .btn-play:hover{background:linear-gradient(135deg,#2eaa35,#45cc50);}
+  .btn-play.on{
+    background:linear-gradient(135deg,#c61f1f,#ee3030);
+    box-shadow:0 2px 8px rgba(200,40,40,0.3);
+  }
+  .btn-rst{
+    background:rgba(40,50,70,0.9);color:#c2d1e2;
+    border:1px solid rgba(80,160,255,0.2);
+  }
+  .btn-rst:hover{background:rgba(60,70,90,0.9);}
+  .rbox{
+    background:linear-gradient(135deg,rgba(0,80,150,0.12),rgba(0,180,130,0.08));
+    border:1px solid rgba(0,180,160,0.25);
+    border-radius:10px;
+    padding:12px;
+  }
+  .rbox h3{
+    font-size:11px;color:#00c8a0;margin-bottom:8px;text-transform:uppercase;letter-spacing:1.5px;
+  }
+  .rr{
+    display:flex;justify-content:space-between;padding:4px 0;
+    border-bottom:1px solid rgba(80,160,255,0.04);font-size:12px;gap:10px;
+  }
+  .rr:last-child{border-bottom:none;}
+  .rl{color:#88a5c6;}
+  .rv{font-weight:700;font-family:Consolas,monospace;text-align:right;}
+  .rv.pos{color:#4fc3f7;}
+  .rv.neg{color:#ef5350;}
+  .rv.res{color:#69f0ae;font-size:14px;}
+  .fbox{
+    background:rgba(25,15,45,0.72);
+    border:1px solid rgba(160,80,255,0.15);
+    border-radius:10px;padding:12px;
+    font-family:Consolas,monospace;font-size:11px;line-height:1.9;
+  }
+  .fbox .eq{color:#c7a8ff;}
+  .fbox .hl{color:#69f0ae;font-weight:700;}
+  .legend{display:flex;flex-direction:column;gap:4px;}
+  .li{display:flex;align-items:center;gap:6px;font-size:11px;}
+  .lc{width:22px;height:3px;border-radius:2px;}
+  #hud{position:absolute;top:12px;left:12px;pointer-events:none;display:flex;flex-direction:column;gap:4px;}
+  #hud .hud-row{
+    font-size:12px;font-family:Consolas,monospace;background:rgba(5,10,20,0.84);
+    padding:4px 9px;border-radius:6px;display:inline-block;border:1px solid rgba(90,140,220,0.12);
+  }
+  .cam-hint{
+    position:absolute;bottom:9px;left:10px;font-size:10px;color:rgba(120,150,200,0.48);pointer-events:none;
+    background:rgba(4,8,18,0.42);padding:4px 7px;border-radius:6px;
+  }
+
+  .toggle-row{display:flex;gap:8px;align-items:center;}
+  .mini-btn{
+    flex:1;padding:10px 12px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:800;
+    color:#d7e6f6;background:rgba(28,44,72,0.92);transition:all .25s ease;
+  }
+  .mini-btn.on{
+    color:#fff;background:linear-gradient(135deg,#15713c,#22a857);
+    box-shadow:0 0 14px rgba(60,180,100,0.28), inset 0 1px 0 rgba(255,255,255,0.14);
+  }
+  .mini-note{font-size:10px;color:#8db0d0;line-height:1.5;margin-top:6px;}
+  #surfaceGuide{
+    position:absolute;right:12px;bottom:18px;z-index:18;pointer-events:none;
+    width:265px;background:rgba(7,16,28,0.78);border:1px solid rgba(70,180,255,0.16);
+    border-radius:14px;padding:12px;backdrop-filter:blur(8px);
+    box-shadow:0 8px 24px rgba(0,0,0,0.22);
+  }
+  #surfaceGuide .sg-title{
+    font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:#8ec8f0;margin-bottom:8px;
+  }
+  .sg-row{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:12px;margin-bottom:5px;color:#c7ddf3;
+  }
+  .sg-row strong{font-family:Consolas,monospace;color:#def4ff;}
+  .sg-bar-wrap{
+    height:7px;background:rgba(0,0,0,0.28);border-radius:5px;overflow:hidden;margin:7px 0 8px;
+  }
+  .sg-bar{
+    height:100%;width:15%;border-radius:5px;background:linear-gradient(90deg,#0076ff,#00d5ff);
+    transition:width .25s ease, filter .25s ease;
+    box-shadow:0 0 18px rgba(0,200,255,0.35);
+  }
+  .sg-note{
+    font-size:10px;color:#9dc7e8;line-height:1.5;
+  }
+  .sg-note b{color:#fff;}
+  @media (max-width:1100px){
+    #panel{width:350px;}
+    #surfaceGuide{width:240px;}
+  }
+  @media (max-width:900px){
+    body{flex-direction:column;}
+    #panel{width:100%;height:44vh;border-left:none;border-top:1px solid var(--line);}
+    #canvas-container{height:56vh;}
+    #surfaceGuide{right:10px;bottom:34px;}
+  }
+</style>
+</head>
+<body>
+<div id="canvas-container">
+  <canvas id="c"></canvas>
+  <div id="hud"></div>
+
+  <div id="surfaceGuide">
+    <div class="sg-title">水面の流れの見え方</div>
+    <div class="sg-row"><span>現在の流速</span><strong id="flowGuideSpeed">1.5 m/s</strong></div>
+    <div class="sg-row"><span>1秒で</span><strong id="flowGuideTravel">1.5 m 下流へ</strong></div>
+    <div class="sg-bar-wrap"><div class="sg-bar" id="flowGuideBar"></div></div>
+    <div class="sg-note">水面の<b>流線の長さ</b>、<b>泡の密度</b>、<b>浮遊物の流れる速さ</b>が流速に連動します。</div>
+  </div>
+
+  <div class="cam-hint">左ドラッグ:回転 / ホイール:ズーム / 右ドラッグ:移動</div>
+</div>
+
+<div id="panel">
+  <div class="sticky-head">
+    <div class="ptitle">川の合成速度 3Dシミュレーター</div>
+    <div class="mode-toggle">
+      <button class="mode-btn active" data-switch-mode="linear">📏 直線上モード</button>
+      <button class="mode-btn" data-switch-mode="planar">📐 平面上モード</button>
+    </div>
+    <div class="mode-caption">下の表示切替でベクトルの有無も変えられます</div>
+  </div>
+
+  <div class="dir-ind" id="dirInd">
+    正の方向 → 下流向き
+    <span class="ar"><span style="color:#ef5350">（−）上流</span> ━━━━━━━━ <span style="color:#4fc3f7">下流（＋）</span></span>
+  </div>
+
+  <div class="cg">
+    <h3>🌊 川の流速</h3>
+    <div class="sr">
+      <label>流速 v水</label>
+      <input type="range" class="sl-r" id="sRiver" min="0" max="10" step="0.1" value="1.5">
+      <span class="v" id="vRiver" style="color:#00bcd4">1.5 m/s</span>
+    </div>
+    <div class="speed-bar-wrap"><div class="speed-bar" id="riverBar" style="width:15%;background:#00bcd4;"></div></div>
+  </div>
+
+  <div class="cg" id="rowWidth" style="display:none">
+    <h3>📏 川の幅</h3>
+    <div class="sr">
+      <label>川幅 W</label>
+      <input type="range" class="sl-w" id="sWidth" min="8" max="30" step="1" value="16">
+      <span class="v" id="vWidth" style="color:#66bb6a">16 m</span>
+    </div>
+  </div>
+
+  <div class="cg">
+    <h3>🚢 船の静水時速度</h3>
+    <div class="sr">
+      <label>速さ |v船|</label>
+      <input type="range" class="sl-b" id="sBoat" min="0" max="12" step="0.1" value="5.0">
+      <span class="v" id="vBoat" style="color:#ff9800">5.0 m/s</span>
+    </div>
+    <div class="speed-bar-wrap"><div class="speed-bar" id="boatBar" style="width:42%;background:#ff9800;"></div></div>
+
+    <div class="sr" id="rowAngle" style="display:none">
+      <label>発射角度 θ</label>
+      <input type="range" class="sl-a" id="sAngle" min="-90" max="90" step="1" value="0">
+      <span class="v" id="vAngle" style="color:#e91e63">0°</span>
+    </div>
+
+    <div id="rowDir">
+      <div class="mode-toggle" style="margin-top:4px;">
+        <button class="dir-btn active" id="bd">下流へ →</button>
+        <button class="dir-btn" id="bu">← 上流へ</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="planar-info" id="planarInfo" style="display:none">
+    📐 <b>θ = 0°</b>: 対岸にまっすぐ<br>
+    📐 <b>θ &gt; 0°</b>: 上流に向ける<br>
+    📐 <b>θ &lt; 0°</b>: 下流に向ける<br>
+    💡 流されないためには θ を調整して <b>Vx = 0</b> に近づけよう
+  </div>
+
+  <div class="cg">
+    <h3>👁 表示切替</h3>
+    <div class="toggle-row">
+      <button class="mini-btn on" id="btnVectors">ベクトル表示: ON</button>
+    </div>
+    <div class="mini-note">矢印・速度ラベル・成分分解線をまとめて表示/非表示にします。</div>
+  </div>
+
+  <div class="timer-box">
+    <div class="tlabel">経過時間</div>
+    <div class="time" id="timerVal">0.00 s</div>
+    <div class="tlabel" style="margin-top:4px;">移動距離: <span id="distVal">0.0 m</span></div>
+    <div class="tlabel" id="driftLabel" style="display:none">流された距離: <span id="driftVal" style="color:#ff6e40">0.0 m</span></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-play" id="bPlay">▶ 開始</button>
+    <button class="btn btn-rst" id="bReset">↺ リセット</button>
+  </div>
+
+  <div class="rbox">
+    <h3>📊 計算結果</h3>
+    <div class="rr"><span class="rl">川の流速 v水</span><span class="rv pos" id="rR">+1.5 m/s</span></div>
+    <div class="rr"><span class="rl">船の速度 v船</span><span class="rv" id="rB">+5.0 m/s</span></div>
+
+    <div id="pRes" style="display:none">
+      <div class="rr"><span class="rl">v船x (川方向)</span><span class="rv" id="rBx">0.0 m/s</span></div>
+      <div class="rr"><span class="rl">v船y (横断方向)</span><span class="rv" id="rBy">5.0 m/s</span></div>
+    </div>
+
+    <div class="rr" style="border-top:1px solid rgba(80,160,255,0.12);padding-top:6px;margin-top:3px;">
+      <span class="rl">合成速度 |V|</span><span class="rv res" id="rV">6.5 m/s</span>
+    </div>
+    <div class="rr"><span class="rl">向き</span><span class="rv" id="rD" style="color:#ffd54f">下流向き</span></div>
+    <div class="rr" id="rAR" style="display:none"><span class="rl">合成角度</span><span class="rv" id="rA" style="color:#ce93d8">—</span></div>
+    <div class="rr" id="crossRow" style="display:none"><span class="rl">横断時間 (理論)</span><span class="rv" id="rCross" style="color:#ffab40">—</span></div>
+    <div class="rr" id="driftRow" style="display:none"><span class="rl">流され量 (理論)</span><span class="rv" id="rDrift" style="color:#ff6e40">—</span></div>
+  </div>
+
+  <div class="fbox" id="fBox">
+    <div class="eq">V = v水 + v船</div>
+    <div class="eq">V = <span style="color:#00e5ff">1.5</span> + <span style="color:#ff9800">5.0</span> = <span class="hl">6.5 m/s</span></div>
+  </div>
+
+  <div class="cg">
+    <h3>🎨 ベクトル凡例</h3>
+    <div class="legend">
+      <div class="li"><div class="lc" style="background:#00e5ff"></div>川の流速 v水（シアン）</div>
+      <div class="li"><div class="lc" style="background:#ff9800"></div>船の速度 v船（オレンジ）</div>
+      <div class="li"><div class="lc" style="background:#69f0ae"></div>合成速度 V（緑）</div>
+      <div class="li"><div class="lc" style="background:#ff4081"></div>船の航跡（ピンク）</div>
+      <div class="li"><div class="lc" style="background:#bde9ff"></div>流線・泡・浮遊物（水面の流れ）</div>
+      <div class="li" id="legDecomp" style="display:none"><div class="lc" style="background:#fff;opacity:0.4;border:1px dashed #888"></div>成分分解（破線）</div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Water } from 'three/addons/objects/Water.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+
+const RL = 70;
+let RW = 16;
+
+let scene, cam, renderer, ctrl, clock, waterMesh, sky, sun, boat;
+let playing = false;
+let mode = 'linear';
+let dir = 'd';
+let showVectors = true;
+
+let bPos = new THREE.Vector3(0, 0.4, 0);
+let simTime = 0;
+let distTraveled = 0;
+let driftX = 0;
+
+let trail = [];
+let trailLine;
+
+let arrowR, arrowB, arrowV, labelR, labelB, labelV;
+let decompLineVx, decompLineVy;
+let bankMeshes = [], bankLabels = [], distMarkers = [];
+
+let flowStreaks = [];
+let flowParticles = [];
+let floatingDebris = [];
+let surfaceArrows = [];
+
+function init(){
+  const cn = document.getElementById('c');
+  const ct = document.getElementById('canvas-container');
+
+  renderer = new THREE.WebGLRenderer({ canvas: cn, antialias: true });
+  renderer.setSize(ct.clientWidth, ct.clientHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x87ceeb, 0.004);
+
+  cam = new THREE.PerspectiveCamera(45, ct.clientWidth / ct.clientHeight, 0.1, 500);
+  cam.position.set(0, 22, 28);
+
+  ctrl = new OrbitControls(cam, cn);
+  ctrl.enableDamping = true;
+  ctrl.dampingFactor = 0.08;
+  ctrl.target.set(0, 0, 0);
+  ctrl.maxPolarAngle = Math.PI / 2.05;
+  ctrl.minDistance = 8;
+  ctrl.maxDistance = 80;
+
+  clock = new THREE.Clock();
+
+  scene.add(new THREE.AmbientLight(0x88aacc, 1.2));
+  scene.add(new THREE.HemisphereLight(0xaaddff, 0x44aa44, 0.9));
+
+  sun = new THREE.Vector3();
+  const dl = new THREE.DirectionalLight(0xfff8e8, 2.8);
+  dl.position.set(20, 40, 15);
+  dl.castShadow = true;
+  dl.shadow.mapSize.set(2048, 2048);
+  dl.shadow.camera.near = 1;
+  dl.shadow.camera.far = 80;
+  dl.shadow.camera.left = -40;
+  dl.shadow.camera.right = 40;
+  dl.shadow.camera.top = 30;
+  dl.shadow.camera.bottom = -30;
+  scene.add(dl);
+
+  buildSky();
+  buildWater();
+  buildTerrain();
+  buildBoat();
+  buildFlowVisuals();
+  buildArrows();
+  buildVelocityLabels();
+  buildTrail();
+  buildLabels();
+  buildDecompLines();
+
+  window.addEventListener('resize', onResize);
+  setupEventListeners();
+  updateVectorToggleButton();
+
+  animate();
+}
+
+function buildSky(){
+  sky = new Sky();
+  sky.scale.setScalar(450);
+  scene.add(sky);
+
+  const u = sky.material.uniforms;
+  u.turbidity.value = 6;
+  u.rayleigh.value = 2.0;
+  u.mieCoefficient.value = 0.003;
+  u.mieDirectionalG.value = 0.7;
+
+  const phi = THREE.MathUtils.degToRad(55);
+  const theta = THREE.MathUtils.degToRad(180);
+  sun.setFromSphericalCoords(1, phi, theta);
+  u.sunPosition.value.copy(sun);
+}
+
+function makeWater(){
+  return new Water(
+    new THREE.PlaneGeometry(RL, RW, 120, 40),
+    {
+      textureWidth: 512,
+      textureHeight: 512,
+      waterNormals: new THREE.TextureLoader().load(
+        'https://threejs.org/examples/textures/waternormals.jpg',
+        t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+      ),
+      sunDirection: new THREE.Vector3(sun.x, sun.y, sun.z).normalize(),
+      sunColor: 0xffffff,
+      waterColor: 0x0077bb,
+      distortionScale: 2.5,
+      fog: false
+    }
+  );
+}
+
+function buildWater(){
+  waterMesh = makeWater();
+  waterMesh.rotation.x = -Math.PI / 2;
+  scene.add(waterMesh);
+}
+
+function rebuildWater(){
+  if(waterMesh){
+    scene.remove(waterMesh);
+    waterMesh.geometry.dispose();
+  }
+  waterMesh = makeWater();
+  waterMesh.rotation.x = -Math.PI / 2;
+  scene.add(waterMesh);
+}
+
+function buildTerrain(){
+  const gnd = new THREE.Mesh(
+    new THREE.PlaneGeometry(200, 200),
+    new THREE.MeshLambertMaterial({ color: 0x3a7a30 })
+  );
+  gnd.rotation.x = -Math.PI / 2;
+  gnd.position.y = -0.6;
+  gnd.receiveShadow = true;
+  scene.add(gnd);
+  buildBanks();
+  buildVegetation();
+}
+
+function buildBanks(){
+  bankMeshes.forEach(m => {
+    scene.remove(m);
+    if(m.geometry) m.geometry.dispose();
+  });
+  bankMeshes = [];
+
+  const bm = new THREE.MeshLambertMaterial({ color: 0x4a8a30 });
+  const ext = { depth: RL, bevelEnabled: false };
+
+  const bp1 = new THREE.Shape();
+  bp1.moveTo(0, -0.6);
+  bp1.lineTo(0, 0.3);
+  bp1.bezierCurveTo(0.5, 0.4, 1, 0.5, 2, 0.8);
+  bp1.lineTo(8, 1.5);
+  bp1.lineTo(8, -0.6);
+  bp1.lineTo(0, -0.6);
+
+  const b1 = new THREE.Mesh(new THREE.ExtrudeGeometry(bp1, ext), bm);
+  b1.rotation.y = Math.PI / 2;
+  b1.position.set(-RL / 2, 0, -(RW / 2));
+  b1.receiveShadow = true;
+  scene.add(b1);
+  bankMeshes.push(b1);
+
+  const bp2 = new THREE.Shape();
+  bp2.moveTo(0, -0.6);
+  bp2.lineTo(0, 0.3);
+  bp2.bezierCurveTo(-0.5, 0.4, -1, 0.5, -2, 0.8);
+  bp2.lineTo(-8, 1.5);
+  bp2.lineTo(-8, -0.6);
+  bp2.lineTo(0, -0.6);
+
+  const b2 = new THREE.Mesh(new THREE.ExtrudeGeometry(bp2, ext), bm);
+  b2.rotation.y = Math.PI / 2;
+  b2.position.set(-RL / 2, 0, RW / 2);
+  b2.receiveShadow = true;
+  scene.add(b2);
+  bankMeshes.push(b2);
+
+  const sandMat = new THREE.MeshLambertMaterial({ color: 0xc4aa70 });
+  const sg1 = new THREE.Mesh(new THREE.BoxGeometry(RL, 0.08, 0.6), sandMat);
+  sg1.position.set(0, 0.05, -RW / 2 - 0.1);
+  scene.add(sg1);
+  bankMeshes.push(sg1);
+
+  const sg2 = new THREE.Mesh(new THREE.BoxGeometry(RL, 0.08, 0.6), sandMat);
+  sg2.position.set(0, 0.05, RW / 2 + 0.1);
+  scene.add(sg2);
+  bankMeshes.push(sg2);
+}
+
+function buildVegetation(){
+  const tm = new THREE.MeshLambertMaterial({ color: 0x2a8a18 });
+  const dm = new THREE.MeshLambertMaterial({ color: 0x1f7a12 });
+  const trm = new THREE.MeshLambertMaterial({ color: 0x6a5030 });
+
+  for(let i = 0; i < 50; i++){
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const x = (Math.random() - 0.5) * RL * 0.9;
+    const z = side * (RW / 2 + 2.5 + Math.random() * 6);
+    const h = 1.5 + Math.random() * 2.5;
+
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, h * 0.4, 5), trm);
+    trunk.position.set(x, h * 0.2 + 0.5, z);
+    trunk.castShadow = true;
+    scene.add(trunk);
+
+    const crown = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4 + Math.random() * 0.6, 6, 6),
+      Math.random() > 0.4 ? tm : dm
+    );
+    crown.position.set(x, h * 0.5 + 0.7, z);
+    crown.castShadow = true;
+    crown.scale.y = 1.2 + Math.random() * 0.5;
+    scene.add(crown);
+  }
+
+  const rm = new THREE.MeshLambertMaterial({ color: 0x778877 });
+  for(let i = 0; i < 20; i++){
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.15 + Math.random() * 0.3, 0), rm);
+    rock.position.set((Math.random() - 0.5) * RL * 0.8, 0.15, side * (RW / 2 + Math.random() * 0.6));
+    rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+    scene.add(rock);
+  }
+}
+
+function buildBoat(){
+  const bg = new THREE.Group();
+
+  const hs = new THREE.Shape();
+  hs.moveTo(-1.4, -0.55);
+  hs.lineTo(1.6, -0.35);
+  hs.quadraticCurveTo(2.2, 0, 1.6, 0.35);
+  hs.lineTo(-1.4, 0.55);
+  hs.quadraticCurveTo(-1.6, 0, -1.4, -0.55);
+
+  const hull = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(hs, {
+      depth: 0.55,
+      bevelEnabled: true,
+      bevelThickness: 0.04,
+      bevelSize: 0.04,
+      bevelSegments: 3
+    }),
+    new THREE.MeshPhongMaterial({ color: 0x6b3a2a, shininess: 40 })
+  );
+  hull.rotation.x = -Math.PI / 2;
+  hull.castShadow = true;
+  bg.add(hull);
+
+  const deck = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 0.1, 0.85),
+    new THREE.MeshPhongMaterial({ color: 0xc49a6c })
+  );
+  deck.position.set(0, 0.6, 0);
+  deck.castShadow = true;
+  bg.add(deck);
+
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.55, 0.6),
+    new THREE.MeshPhongMaterial({ color: 0xeeeeee, shininess: 60 })
+  );
+  cabin.position.set(-0.15, 0.95, 0);
+  cabin.castShadow = true;
+  bg.add(cabin);
+
+  const wm = new THREE.MeshPhongMaterial({
+    color: 0x66aaff,
+    emissive: 0x224466,
+    emissiveIntensity: 0.3,
+    shininess: 100
+  });
+
+  [[-0.05,0.95,0.31],[0.15,0.95,0.31],[-0.05,0.95,-0.31],[0.15,0.95,-0.31]].forEach(p => {
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.2), wm);
+    w.position.set(...p);
+    if(Math.abs(p[2]) > 0.3) w.rotation.y = p[2] > 0 ? 0 : Math.PI;
+    bg.add(w);
+  });
+
+  const chimney = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.09, 0.5, 8),
+    new THREE.MeshPhongMaterial({ color: 0x222222 })
+  );
+  chimney.position.set(-0.35, 1.45, 0);
+  bg.add(chimney);
+
+  const mast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.02, 0.02, 1, 6),
+    new THREE.MeshPhongMaterial({ color: 0xdddddd })
+  );
+  mast.position.set(0.5, 1.1, 0);
+  bg.add(mast);
+
+  const flag = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.35, 0.22),
+    new THREE.MeshBasicMaterial({ color: 0xff2222, side: THREE.DoubleSide })
+  );
+  flag.position.set(0.5, 1.7, 0.12);
+  bg.add(flag);
+
+  bg.scale.set(1.1, 1.1, 1.1);
+  bg.position.copy(bPos);
+  scene.add(bg);
+  boat = bg;
+}
+
+function clearFlowVisuals(){
+  [...flowStreaks, ...flowParticles, ...floatingDebris, ...surfaceArrows].forEach(obj => {
+    scene.remove(obj);
+    if(obj.geometry) obj.geometry.dispose();
+    if(obj.material){
+      if(Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+      else obj.material.dispose();
+    }
+    if(obj.children){
+      obj.children.forEach(ch => {
+        if(ch.geometry) ch.geometry.dispose?.();
+        if(ch.material){
+          if(Array.isArray(ch.material)) ch.material.forEach(m => m.dispose());
+          else ch.material.dispose?.();
+        }
+      });
+    }
+  });
+  flowStreaks = [];
+  flowParticles = [];
+  floatingDebris = [];
+  surfaceArrows = [];
+}
+
+function buildFlowVisuals(){
+  clearFlowVisuals();
+
+  const streakGeo = new THREE.PlaneGeometry(1, 1);
+  for(let i = 0; i < 260; i++){
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x8fe9ff,
+      transparent: true,
+      opacity: 0.16 + Math.random() * 0.12,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const s = new THREE.Mesh(streakGeo, mat);
+    s.rotation.x = -Math.PI / 2;
+    s.position.set((Math.random() - 0.5) * RL, 0.08 + Math.random() * 0.02, (Math.random() - 0.5) * RW * 0.92);
+    s.userData = {
+      baseLen: 0.5 + Math.random() * 3.5,
+      baseWid: 0.018 + Math.random() * 0.05,
+      speedMul: 0.82 + Math.random() * 0.35,
+      swayAmp: 0.03 + Math.random() * 0.06,
+      swaySpeed: 0.7 + Math.random() * 1.6,
+      phase: Math.random() * Math.PI * 2
+    };
+    scene.add(s);
+    flowStreaks.push(s);
+  }
+
+  const bubbleGeo = new THREE.CircleGeometry(0.08, 8);
+  for(let i = 0; i < 210; i++){
+    const p = new THREE.Mesh(
+      bubbleGeo,
+      new THREE.MeshBasicMaterial({
+        color: 0xdff7ff,
+        transparent: true,
+        opacity: 0.12 + Math.random() * 0.14,
+        depthWrite: false
+      })
+    );
+    p.rotation.x = -Math.PI / 2;
+    p.position.set((Math.random() - 0.5) * RL, 0.075, (Math.random() - 0.5) * RW * 0.92);
+    p.userData = {
+      speedMul: 0.75 + Math.random() * 0.55,
+      phase: Math.random() * Math.PI * 2,
+      bob: 0.004 + Math.random() * 0.012
+    };
+    scene.add(p);
+    flowParticles.push(p);
+  }
+
+  for(let i = 0; i < 26; i++){
+    const kind = i % 3;
+    const debris = makeDebris(kind);
+    debris.position.set((Math.random() - 0.5) * RL, 0.13, (Math.random() - 0.5) * RW * 0.85);
+    debris.userData = {
+      speedMul: 0.72 + Math.random() * 0.38,
+      bobPhase: Math.random() * Math.PI * 2,
+      bobAmp: 0.01 + Math.random() * 0.01,
+      spin: (Math.random() - 0.5) * 0.7,
+      driftZ: (Math.random() - 0.5) * 0.15
+    };
+    scene.add(debris);
+    floatingDebris.push(debris);
+  }
+
+  const arrowShape = new THREE.Shape();
+  arrowShape.moveTo(0, 0);
+  arrowShape.lineTo(-0.28, 0.2);
+  arrowShape.lineTo(-0.13, 0.2);
+  arrowShape.lineTo(-0.13, 0.68);
+  arrowShape.lineTo(0.13, 0.68);
+  arrowShape.lineTo(0.13, 0.2);
+  arrowShape.lineTo(0.28, 0.2);
+  arrowShape.lineTo(0, 0);
+
+  const arrowGeo = new THREE.ShapeGeometry(arrowShape);
+  for(let x = -28; x <= 28; x += 5){
+    for(let z = -(RW / 2 - 2); z <= RW / 2 - 2; z += 3.5){
+      const sa = new THREE.Mesh(
+        arrowGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x5dd6ff,
+          transparent: true,
+          opacity: 0.10,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        })
+      );
+      sa.rotation.x = -Math.PI / 2;
+      sa.rotation.z = -Math.PI / 2;
+      sa.position.set(x, 0.045, z);
+      sa.userData = {
+        speedMul: 0.9 + Math.random() * 0.18
+      };
+      scene.add(sa);
+      surfaceArrows.push(sa);
+    }
+  }
+}
+
+function makeDebris(kind){
+  const g = new THREE.Group();
+  if(kind === 0){
+    const leaf = new THREE.Mesh(
+      new THREE.CircleGeometry(0.16, 10),
+      new THREE.MeshBasicMaterial({
+        color: 0x6ecf5e,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide
+      })
+    );
+    leaf.rotation.x = -Math.PI / 2;
+    leaf.scale.set(1.2, 0.7, 1);
+    g.add(leaf);
+  }else if(kind === 1){
+    const twig = new THREE.Mesh(
+      new THREE.BoxGeometry(0.38, 0.05, 0.12),
+      new THREE.MeshLambertMaterial({ color: 0x7a5532 })
+    );
+    twig.position.y = 0.02;
+    g.add(twig);
+  }else{
+    const foam = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 8, 8),
+      new THREE.MeshPhongMaterial({
+        color: 0xf1fbff,
+        transparent: true,
+        opacity: 0.9,
+        shininess: 100
+      })
+    );
+    foam.scale.set(1.0, 0.55, 1.0);
+    g.add(foam);
+  }
+  return g;
+}
+
+function updateFlowVisuals(dt){
+  const riverSpeed = parseFloat(document.getElementById('sRiver').value);
+  const t = clock.elapsedTime;
+  const visualSpeed = riverSpeed;
+
+  flowStreaks.forEach(s => {
+    s.position.x += visualSpeed * dt * s.userData.speedMul;
+    if(s.position.x > RL / 2 + 4){
+      s.position.x = -RL / 2 - 4;
+      s.position.z = (Math.random() - 0.5) * RW * 0.92;
+    }
+    s.position.z += Math.sin(t * s.userData.swaySpeed + s.userData.phase) * s.userData.swayAmp * 0.01;
+    s.scale.set(
+      s.userData.baseLen * (0.65 + riverSpeed * 0.17),
+      1,
+      s.userData.baseWid * (1.0 + riverSpeed * 0.09)
+    );
+    s.material.opacity = Math.min(0.74, 0.07 + riverSpeed * 0.035 + 0.05 * Math.sin(t * 1.4 + s.userData.phase));
+  });
+
+  flowParticles.forEach(p => {
+    p.position.x += visualSpeed * dt * p.userData.speedMul;
+    if(p.position.x > RL / 2 + 1.5){
+      p.position.x = -RL / 2 - 1.5;
+      p.position.z = (Math.random() - 0.5) * RW * 0.92;
+    }
+    p.position.y = 0.075 + Math.sin(t * 4 + p.userData.phase) * p.userData.bob;
+    const pulse = 0.55 + 0.45 * Math.sin(t * 2.3 + p.userData.phase);
+    const s = 0.35 + riverSpeed * 0.05 + pulse * 0.12;
+    p.scale.setScalar(s);
+    p.material.opacity = Math.min(0.55, 0.04 + riverSpeed * 0.03 + pulse * 0.12);
+  });
+
+  floatingDebris.forEach(d => {
+    d.position.x += visualSpeed * dt * d.userData.speedMul;
+    if(d.position.x > RL / 2 + 2){
+      d.position.x = -RL / 2 - 2;
+      d.position.z = (Math.random() - 0.5) * RW * 0.85;
+    }
+    d.position.y = 0.11 + Math.sin(t * 2.5 + d.userData.bobPhase) * d.userData.bobAmp;
+    d.position.z += Math.sin(t * 0.8 + d.userData.bobPhase) * d.userData.driftZ * 0.003;
+    d.rotation.y += d.userData.spin * dt;
+    d.rotation.z = Math.sin(t * 1.4 + d.userData.bobPhase) * 0.08;
+  });
+
+  surfaceArrows.forEach(a => {
+    a.position.x += visualSpeed * dt * a.userData.speedMul;
+    if(a.position.x > RL / 2 + 2){
+      a.position.x = -RL / 2 - 2;
+    }
+    const sc = 0.45 + riverSpeed * 0.075;
+    a.scale.set(sc, sc, sc);
+    a.material.opacity = Math.min(0.3, 0.03 + riverSpeed * 0.022);
+    a.visible = Math.abs(a.position.z) < RW / 2 - 1.2;
+  });
+}
+
+function buildArrows(){
+  arrowR = makeArrow(0x00e5ff);
+  arrowB = makeArrow(0xff9800);
+  arrowV = makeArrow(0x69f0ae);
+  scene.add(arrowR);
+  scene.add(arrowB);
+  scene.add(arrowV);
+}
+
+function updateVectorToggleButton(){
+  const btn = document.getElementById('btnVectors');
+  if(!btn) return;
+  btn.textContent = 'ベクトル表示: ' + (showVectors ? 'ON' : 'OFF');
+  btn.classList.toggle('on', showVectors);
+}
+
+function toggleVectorVisibility(){
+  showVectors = !showVectors;
+  updateVectorToggleButton();
+  updateAll();
+}
+
+function makeArrow(color){
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.4 });
+
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1, 8), mat);
+  shaft.name = 's';
+  g.add(shaft);
+
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.55, 8), mat.clone());
+  head.name = 'h';
+  g.add(head);
+
+  const glow = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.16, 1, 8),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12 })
+  );
+  glow.name = 'g';
+  g.add(glow);
+
+  return g;
+}
+
+function positionArrow(group, origin, dirV, len){
+  if(!showVectors || len < 0.01){
+    group.visible = false;
+    return;
+  }
+  group.visible = true;
+  const shaftLen = len * 1.6;
+  const shaft = group.getObjectByName('s');
+  const head = group.getObjectByName('h');
+  const glow = group.getObjectByName('g');
+
+  group.position.copy(origin);
+  group.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirV.clone().normalize()));
+
+  shaft.scale.set(1, shaftLen, 1);
+  shaft.position.set(0, shaftLen / 2, 0);
+  head.position.set(0, shaftLen + 0.25, 0);
+  glow.scale.set(1, shaftLen, 1);
+  glow.position.set(0, shaftLen / 2, 0);
+}
+
+function buildVelocityLabels(){
+  labelR = makeLabel('#00e5ff', 'rgba(0,20,40,0.8)');
+  labelB = makeLabel('#ff9800', 'rgba(40,20,0,0.8)');
+  labelV = makeLabel('#69f0ae', 'rgba(0,30,15,0.85)');
+}
+
+function makeLabel(color, bg){
+  const cv = document.createElement('canvas');
+  cv.width = 256;
+  cv.height = 64;
+  const tx = new THREE.CanvasTexture(cv);
+  tx.minFilter = THREE.LinearFilter;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, transparent: true, depthTest: false }));
+  sp.scale.set(3.2, 0.8, 1);
+  sp.userData = { canvas: cv, color, bg };
+  scene.add(sp);
+  return sp;
+}
+
+function updateLabel(sprite, text){
+  if(sprite.userData._text === text) return;
+  sprite.userData._text = text;
+
+  const cv = sprite.userData.canvas;
+  const cx = cv.getContext('2d');
+  cx.clearRect(0, 0, 256, 64);
+  cx.font = 'bold 28px Consolas,monospace';
+  cx.fillStyle = sprite.userData.bg;
+  const tw = Math.min(240, cx.measureText(text).width + 30);
+  const px = (256 - tw) / 2;
+
+  roundedRect(cx, px, 8, tw, 48, 12);
+  cx.fill();
+  cx.strokeStyle = sprite.userData.color;
+  cx.lineWidth = 2;
+  roundedRect(cx, px, 8, tw, 48, 12);
+  cx.stroke();
+
+  cx.fillStyle = sprite.userData.color;
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText(text, 128, 32);
+  sprite.material.map.needsUpdate = true;
+}
+
+function roundedRect(cx, x, y, w, h, r){
+  cx.beginPath();
+  cx.moveTo(x + r, y);
+  cx.lineTo(x + w - r, y);
+  cx.quadraticCurveTo(x + w, y, x + w, y + r);
+  cx.lineTo(x + w, y + h - r);
+  cx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  cx.lineTo(x + r, y + h);
+  cx.quadraticCurveTo(x, y + h, x, y + h - r);
+  cx.lineTo(x, y + r);
+  cx.quadraticCurveTo(x, y, x + r, y);
+  cx.closePath();
+}
+
+function positionLabel(sprite, origin, dir, len){
+  if(!showVectors || len < 0.01){
+    sprite.visible = false;
+    return;
+  }
+  sprite.visible = true;
+  const tip = origin.clone().add(dir.clone().normalize().multiplyScalar(len * 1.6 + 0.8));
+  tip.y += 0.5;
+  sprite.position.copy(tip);
+}
+
+function buildDecompLines(){
+  const d1 = new THREE.LineDashedMaterial({
+    color: 0x00e5ff,
+    dashSize: 0.25,
+    gapSize: 0.18,
+    transparent: true,
+    opacity: 0.5
+  });
+  decompLineVx = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), d1);
+  decompLineVx.computeLineDistances();
+  decompLineVx.visible = false;
+  scene.add(decompLineVx);
+
+  const d2 = new THREE.LineDashedMaterial({
+    color: 0xff9800,
+    dashSize: 0.25,
+    gapSize: 0.18,
+    transparent: true,
+    opacity: 0.5
+  });
+  decompLineVy = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), d2);
+  decompLineVy.computeLineDistances();
+  decompLineVy.visible = false;
+  scene.add(decompLineVy);
+}
+
+function updateDecomp(origin, rx, rz){
+  if(!showVectors || mode !== 'planar'){
+    decompLineVx.visible = false;
+    decompLineVy.visible = false;
+    return;
+  }
+  decompLineVx.visible = true;
+  decompLineVy.visible = true;
+
+  const sc = 1.6;
+  const tx = origin.x + rx * sc;
+  const tz = origin.z + rz * sc;
+  const y = origin.y;
+
+  let pts = [new THREE.Vector3(origin.x, y, origin.z), new THREE.Vector3(tx, y, origin.z)];
+  decompLineVx.geometry.setFromPoints(pts);
+  decompLineVx.computeLineDistances();
+  decompLineVx.geometry.attributes.position.needsUpdate = true;
+
+  pts = [new THREE.Vector3(tx, y, origin.z), new THREE.Vector3(tx, y, tz)];
+  decompLineVy.geometry.setFromPoints(pts);
+  decompLineVy.computeLineDistances();
+  decompLineVy.geometry.attributes.position.needsUpdate = true;
+}
+
+function buildTrail(){
+  const mat = new THREE.LineBasicMaterial({ color: 0xff4081, transparent: true, opacity: 0.8 });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6000), 3));
+  trailLine = new THREE.Line(geo, mat);
+  trailLine.frustumCulled = false;
+  scene.add(trailLine);
+}
+
+function updateTrail(){
+  if(trail.length < 2){
+    trailLine.geometry.setDrawRange(0, 0);
+    trailLine.geometry.attributes.position.needsUpdate = true;
+    return;
+  }
+  const pa = trailLine.geometry.attributes.position.array;
+  const n = Math.min(trail.length, 2000);
+  for(let i = 0; i < n; i++){
+    pa[i * 3] = trail[i].x;
+    pa[i * 3 + 1] = trail[i].y;
+    pa[i * 3 + 2] = trail[i].z;
+  }
+  trailLine.geometry.setDrawRange(0, n);
+  trailLine.geometry.attributes.position.needsUpdate = true;
+}
+
+function buildLabels(){
+  makeSpriteLabel('上流（−）', -RL / 2 + 3, 3.5, 0, '#ef5350', 1.2);
+  makeSpriteLabel('下流（＋）', RL / 2 - 3, 3.5, 0, '#4fc3f7', 1.2);
+  rebuildBankLabels();
+  rebuildDistanceMarkers();
+}
+
+function rebuildBankLabels(){
+  bankLabels.forEach(s => {
+    scene.remove(s);
+    s.material.map.dispose();
+    s.material.dispose();
+  });
+  bankLabels = [];
+  bankLabels.push(makeSpriteLabel('対岸', 0, 3, -RW / 2 - 3.5, '#ddddff', 0.9));
+  bankLabels.push(makeSpriteLabel('こちら岸', 0, 3, RW / 2 + 3.5, '#ddddff', 0.9));
+}
+
+function rebuildDistanceMarkers(){
+  distMarkers.forEach(s => {
+    scene.remove(s);
+    s.material.map.dispose();
+    s.material.dispose();
+  });
+  distMarkers = [];
+  for(let x = -24; x <= 24; x += 6){
+    distMarkers.push(makeSpriteLabel(x + 'm', x, 0.5, -RW / 2 - 0.5, '#556677', 0.4));
+  }
+}
+
+function makeSpriteLabel(text, x, y, z, color, scale){
+  const cv = document.createElement('canvas');
+  const cx = cv.getContext('2d');
+  cv.width = 512;
+  cv.height = 128;
+  cx.fillStyle = color || '#fff';
+  cx.font = 'bold 44px Meiryo,sans-serif';
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText(text, 256, 64);
+  const tx = new THREE.CanvasTexture(cv);
+  tx.minFilter = THREE.LinearFilter;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, transparent: true, depthTest: false }));
+  sp.position.set(x, y, z);
+  sp.scale.set(4 * (scale || 1), (scale || 1), 1);
+  scene.add(sp);
+  return sp;
+}
+
+function getVelocityState(){
+  const rs = +document.getElementById('sRiver').value;
+  const bs = +document.getElementById('sBoat').value;
+  const ang = +document.getElementById('sAngle').value;
+
+  if(mode === 'linear'){
+    const sign = dir === 'd' ? 1 : -1;
+    const bv = bs * sign;
+    return {
+      rs,
+      bs,
+      bvx: bv,
+      bvz: 0,
+      rvx: rs + bv,
+      rvz: 0,
+      rSpeed: Math.abs(rs + bv),
+      ang: 0
+    };
+  }
+
+  const rad = ang * Math.PI / 180;
+  const bx = -bs * Math.sin(rad);
+  const bz = -bs * Math.cos(rad);
+  const rx = rs + bx;
+  const rz = bz;
+
+  return {
+    rs,
+    bs,
+    bvx: bx,
+    bvz: bz,
+    rvx: rx,
+    rvz: rz,
+    rSpeed: Math.sqrt(rx * rx + rz * rz),
+    ang: Math.atan2(rx, -rz) * 180 / Math.PI
+  };
+}
+
+function updateAll(){
+  const v = getVelocityState();
+  const origin = boat ? boat.position.clone().add(new THREE.Vector3(0, 2.2, 0)) : new THREE.Vector3(0, 2.6, 0);
+
+  const riverDir = new THREE.Vector3(1, 0, 0);
+  positionArrow(arrowR, origin, riverDir, v.rs);
+
+  const boatVec = new THREE.Vector3(v.bvx, 0, v.bvz);
+  const boatDir = boatVec.length() > 0.001 ? boatVec.clone().normalize() : new THREE.Vector3(1, 0, 0);
+  const boatLen = Math.sqrt(v.bvx * v.bvx + v.bvz * v.bvz);
+  positionArrow(arrowB, origin, boatDir, boatLen);
+
+  const resVec = new THREE.Vector3(v.rvx, 0, v.rvz);
+  const resOrigin = origin.clone();
+  resOrigin.y -= 0.7;
+  const resDir = resVec.length() > 0.001 ? resVec.clone().normalize() : new THREE.Vector3(1, 0, 0);
+  positionArrow(arrowV, resOrigin, resDir, v.rSpeed);
+
+  if(mode === 'linear'){
+    const bv = v.bvx;
+    const rv = v.rvx;
+    updateLabel(labelR, 'v水 ' + v.rs.toFixed(1) + ' m/s');
+    positionLabel(labelR, origin, riverDir, v.rs);
+    updateLabel(labelB, 'v船 ' + (bv >= 0 ? '+' : '') + bv.toFixed(1) + ' m/s');
+    positionLabel(labelB, origin, boatDir, boatLen);
+    updateLabel(labelV, 'V ' + (rv >= 0 ? '+' : '') + rv.toFixed(1) + ' m/s');
+    positionLabel(labelV, resOrigin, resDir, v.rSpeed);
+  }else{
+    updateLabel(labelR, 'v水 ' + v.rs.toFixed(1) + ' m/s');
+    positionLabel(labelR, origin, riverDir, v.rs);
+    updateLabel(labelB, 'v船 ' + v.bs.toFixed(1) + ' m/s');
+    positionLabel(labelB, origin, boatDir, boatLen);
+    updateLabel(labelV, 'V ' + v.rSpeed.toFixed(2) + ' m/s');
+    positionLabel(labelV, resOrigin, resDir, v.rSpeed);
+  }
+
+  updateDecomp(resOrigin, v.rvx, v.rvz);
+
+  if(boat){
+    if(mode === 'linear'){
+      boat.rotation.y = dir === 'd' ? 0 : Math.PI;
+    }else{
+      boat.rotation.y = -Math.atan2(v.bvz, v.bvx);
+    }
+  }
+
+  updateUI(v);
+  updateHUD(v);
+}
+
+function updateUI(v){
+  document.getElementById('rR').textContent = '+' + v.rs.toFixed(1) + ' m/s';
+  document.getElementById('riverBar').style.width = (v.rs / 10) * 100 + '%';
+  document.getElementById('riverBar').style.background = 'rgb(0,' + Math.min(255, 110 + v.rs * 18) + ',' + Math.min(230, 180 + v.rs * 6) + ')';
+
+  document.getElementById('boatBar').style.width = (v.bs / 12) * 100 + '%';
+
+  document.getElementById('flowGuideSpeed').textContent = v.rs.toFixed(1) + ' m/s';
+  document.getElementById('flowGuideTravel').textContent = v.rs.toFixed(1) + ' m 下流へ';
+  document.getElementById('flowGuideBar').style.width = (v.rs / 10) * 100 + '%';
+  document.getElementById('flowGuideBar').style.filter = 'saturate(' + (0.8 + v.rs * 0.12) + ') brightness(' + (0.9 + v.rs * 0.05) + ')';
+
+  if(mode === 'linear'){
+    const bv = v.bvx;
+    const rv = v.rvx;
+    document.getElementById('rB').textContent = (bv >= 0 ? '+' : '') + bv.toFixed(1) + ' m/s';
+    document.getElementById('rB').className = 'rv ' + (bv >= 0 ? 'pos' : 'neg');
+    document.getElementById('rV').textContent = Math.abs(rv).toFixed(1) + ' m/s';
+    document.getElementById('rD').textContent = rv >= 0 ? '下流向き →' : '← 上流向き';
+    document.getElementById('rD').style.color = rv >= 0 ? '#4fc3f7' : '#ef5350';
+
+    document.getElementById('pRes').style.display = 'none';
+    document.getElementById('rAR').style.display = 'none';
+    document.getElementById('crossRow').style.display = 'none';
+    document.getElementById('driftRow').style.display = 'none';
+
+    document.getElementById('fBox').innerHTML =
+      '<div class="eq">V = v水 + v船</div>' +
+      '<div class="eq">V = <span style="color:#00e5ff">' + v.rs.toFixed(1) + '</span> + (<span style="color:#ff9800">' + (bv >= 0 ? '+' : '') + bv.toFixed(1) + '</span>)</div>' +
+      '<div class="eq">V = <span class="hl">' + (rv >= 0 ? '+' : '') + rv.toFixed(1) + ' m/s</span></div>' +
+      '<div class="eq" style="color:#ffd54f;margin-top:3px;">→ ' + (rv >= 0 ? '下流向き' : '上流向き') + 'に ' + Math.abs(rv).toFixed(1) + ' m/s</div>';
+  }else{
+    const ang = +document.getElementById('sAngle').value;
+    document.getElementById('rB').textContent = v.bs.toFixed(1) + ' m/s (θ=' + ang + '°)';
+    document.getElementById('rB').className = 'rv';
+    document.getElementById('rB').style.color = '#ff9800';
+    document.getElementById('rBx').textContent = (v.bvx >= 0 ? '+' : '') + v.bvx.toFixed(2) + ' m/s';
+    document.getElementById('rBx').className = 'rv ' + (v.bvx >= 0 ? 'pos' : 'neg');
+    document.getElementById('rBy').textContent = v.bvz.toFixed(2) + ' m/s';
+    document.getElementById('rV').textContent = v.rSpeed.toFixed(2) + ' m/s';
+    document.getElementById('rD').textContent = v.rvx >= 0 ? '下流寄り' : '上流寄り';
+    document.getElementById('rD').style.color = '#ffd54f';
+    document.getElementById('rA').textContent = v.ang.toFixed(1) + '°';
+
+    document.getElementById('pRes').style.display = 'block';
+    document.getElementById('rAR').style.display = 'flex';
+    document.getElementById('crossRow').style.display = 'flex';
+    document.getElementById('driftRow').style.display = 'flex';
+
+    const vy = Math.abs(v.bvz);
+    const ct = vy > 0.01 ? (RW / vy) : Infinity;
+    const dr = ct < 1000 ? Math.abs(v.rvx * ct) : Infinity;
+
+    document.getElementById('rCross').textContent = ct < 1000 ? ct.toFixed(2) + ' s' : '—';
+    document.getElementById('rDrift').textContent = ct < 1000 ? dr.toFixed(1) + ' m ' + (v.rvx >= 0 ? '(下流)' : '(上流)') : '—';
+
+    document.getElementById('fBox').innerHTML =
+      '<div class="eq">v船x = -|v船|sin(θ) = <span style="color:#ff9800">' + v.bvx.toFixed(2) + '</span></div>' +
+      '<div class="eq">v船y = -|v船|cos(θ) = <span style="color:#ff9800">' + v.bvz.toFixed(2) + '</span></div>' +
+      '<div class="eq" style="margin-top:4px;">Vx = v水 + v船x = <span style="color:#00e5ff">' + v.rs.toFixed(1) + '</span> + (' + v.bvx.toFixed(2) + ') = <span class="hl">' + v.rvx.toFixed(2) + '</span></div>' +
+      '<div class="eq">Vy = v船y = <span class="hl">' + v.rvz.toFixed(2) + '</span></div>' +
+      '<div class="eq" style="margin-top:4px;">|V| = √(Vx²+Vy²) = <span class="hl">' + v.rSpeed.toFixed(2) + ' m/s</span></div>' +
+      '<div class="eq">合成角 = ' + v.ang.toFixed(1) + '°</div>';
+  }
+}
+
+function updateHUD(v){
+  let h = '<div class="hud-row" style="color:#00e5ff">🌊 川: ' + v.rs.toFixed(1) + ' m/s →</div>';
+
+  if(mode === 'linear'){
+    h += '<div class="hud-row" style="color:#ff9800">🚢 船: ' + v.bs.toFixed(1) + ' m/s ' + (v.bvx >= 0 ? '→' : '←') + '</div>';
+    h += '<div class="hud-row" style="color:#69f0ae">⚡ 合成: ' + Math.abs(v.rvx).toFixed(1) + ' m/s ' + (v.rvx >= 0 ? '→' : '←') + '</div>';
+  }else{
+    h += '<div class="hud-row" style="color:#ff9800">🚢 船: ' + v.bs.toFixed(1) + ' m/s θ=' + document.getElementById('sAngle').value + '°</div>';
+    h += '<div class="hud-row" style="color:#69f0ae">⚡ 合成: ' + v.rSpeed.toFixed(2) + ' m/s (' + v.ang.toFixed(1) + '°)</div>';
+    if(Math.abs(v.rvx) < 0.05){
+      h += '<div class="hud-row" style="color:#ffd740;background:rgba(50,40,0,0.9);">✨ 流れに対してほぼ直進</div>';
+    }
+  }
+
+  if(playing){
+    h += '<div class="hud-row" style="color:#ff9800">⏱ ' + simTime.toFixed(2) + ' s</div>';
+    h += '<div class="hud-row" style="color:#ff4081">📏 ' + distTraveled.toFixed(1) + ' m</div>';
+    if(mode === 'planar'){
+      h += '<div class="hud-row" style="color:#ff6e40">↔ 流され: ' + Math.abs(driftX).toFixed(1) + ' m</div>';
+    }
+  }
+
+  document.getElementById('hud').innerHTML = h;
+}
+
+function simulateStep(dt){
+  if(!playing) return;
+
+  simTime += dt;
+  const v = getVelocityState();
+  const dx = v.rvx * dt;
+  const dz = v.rvz * dt;
+
+  bPos.x += dx;
+  bPos.z += dz;
+  distTraveled += Math.sqrt(dx * dx + dz * dz);
+  driftX += dx;
+
+  if(bPos.x > RL / 2 - 2){
+    bPos.x = -RL / 2 + 2;
+    trail = [];
+  }
+  if(bPos.x < -RL / 2 + 2){
+    bPos.x = RL / 2 - 2;
+    trail = [];
+  }
+
+  if(mode === 'planar' && bPos.z <= -RW / 2){
+    bPos.z = -RW / 2;
+    playing = false;
+    document.getElementById('bPlay').textContent = '✅ 到着！';
+    document.getElementById('bPlay').classList.remove('on');
+  }
+
+  if(bPos.z > RW / 2 + 1) bPos.z = RW / 2;
+
+  boat.position.set(bPos.x, bPos.y + Math.sin(clock.elapsedTime * 2.5) * 0.06, bPos.z);
+  boat.rotation.z = Math.sin(clock.elapsedTime * 1.8) * 0.025;
+
+  trail.push(new THREE.Vector3(bPos.x, 0.15, bPos.z));
+  if(trail.length > 2000) trail.shift();
+  updateTrail();
+
+  document.getElementById('timerVal').textContent = simTime.toFixed(2) + ' s';
+  document.getElementById('distVal').textContent = distTraveled.toFixed(1) + ' m';
+  document.getElementById('driftVal').textContent = Math.abs(driftX).toFixed(1) + ' m';
+
+  updateAll();
+}
+
+function animateWater(t){
+  if(!waterMesh) return;
+  const rs = +document.getElementById('sRiver').value;
+  waterMesh.material.uniforms.time.value = t * (0.20 + rs * 0.75);
+  waterMesh.material.uniforms.distortionScale.value = 1.0 + rs * 2.7;
+
+  const base = 0x0077bb;
+  const rF = Math.min(1, rs / 10);
+  waterMesh.material.uniforms.waterColor.value.setRGB(
+    ((base >> 16) & 0xff) * (1 - rF * 0.3) / 255,
+    ((base >> 8) & 0xff) * (1 - rF * 0.2) / 255,
+    Math.min(1, (base & 0xff) * (1 + rF * 0.16) / 255)
+  );
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  ctrl.update();
+  animateWater(t);
+  updateFlowVisuals(dt);
+  simulateStep(dt);
+
+  if(!playing && boat){
+    boat.position.y = bPos.y + Math.sin(t * 2) * 0.05;
+    boat.rotation.z = Math.sin(t * 1.5) * 0.015;
+  }
+
+  renderer.render(scene, cam);
+}
+
+function setModeButtonsActive(m){
+  document.querySelectorAll('[data-switch-mode]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.switchMode === m);
+  });
+}
+
+function switchMode(m){
+  mode = m;
+  setModeButtonsActive(m);
+
+  document.getElementById('rowAngle').style.display = m === 'planar' ? 'flex' : 'none';
+  document.getElementById('rowDir').style.display = m === 'linear' ? 'block' : 'none';
+  document.getElementById('planarInfo').style.display = m === 'planar' ? 'block' : 'none';
+  document.getElementById('legDecomp').style.display = m === 'planar' ? 'flex' : 'none';
+  document.getElementById('driftLabel').style.display = m === 'planar' ? 'block' : 'none';
+  document.getElementById('rowWidth').style.display = m === 'planar' ? 'block' : 'none';
+
+  if(m === 'planar'){
+    document.getElementById('dirInd').innerHTML =
+      '川の流れ → 下流向き（+X）<br>横断方向 → 対岸向き（−Z）' +
+      '<span class="ar"><span style="color:#ff9800">こちら岸</span> ━━━━━━ <span style="color:#69f0ae">対岸</span></span>';
+    cam.position.set(0, 30, 22);
+  }else{
+    document.getElementById('dirInd').innerHTML =
+      '正の方向 → 下流向き' +
+      '<span class="ar"><span style="color:#ef5350">（−）上流</span> ━━━━━━━━ <span style="color:#4fc3f7">下流（＋）</span></span>';
+    cam.position.set(0, 22, 28);
+  }
+
+  resetSim();
+}
+
+function switchDirection(d){
+  dir = d;
+  document.getElementById('bd').classList.toggle('active', d === 'd');
+  document.getElementById('bu').classList.toggle('active', d === 'u');
+  updateAll();
+}
+
+function togglePlay(){
+  const playBtn = document.getElementById('bPlay');
+  if(playBtn.textContent.includes('到着')){
+    resetSim();
+    return;
+  }
+  playing = !playing;
+  if(playing){
+    playBtn.textContent = '⏸ 一時停止';
+    playBtn.classList.add('on');
+  }else{
+    playBtn.textContent = '▶ 再開';
+    playBtn.classList.remove('on');
+  }
+}
+
+function resetSim(){
+  playing = false;
+  simTime = 0;
+  distTraveled = 0;
+  driftX = 0;
+
+  const playBtn = document.getElementById('bPlay');
+  playBtn.textContent = '▶ 開始';
+  playBtn.classList.remove('on');
+
+  if(mode === 'linear'){
+    bPos.set(dir === 'd' ? -12 : 12, 0.4, 0);
+  }else{
+    bPos.set(0, 0.4, RW / 2 - 1);
+  }
+
+  if(boat) boat.position.copy(bPos);
+
+  trail = [];
+  updateTrail();
+
+  document.getElementById('timerVal').textContent = '0.00 s';
+  document.getElementById('distVal').textContent = '0.0 m';
+  document.getElementById('driftVal').textContent = '0.0 m';
+
+  updateAll();
+}
+
+function setupEventListeners(){
+  document.querySelectorAll('[data-switch-mode]').forEach(btn => {
+    btn.addEventListener('click', () => switchMode(btn.dataset.switchMode));
+  });
+
+  document.getElementById('bd').addEventListener('click', () => switchDirection('d'));
+  document.getElementById('bu').addEventListener('click', () => switchDirection('u'));
+  document.getElementById('bPlay').addEventListener('click', togglePlay);
+  document.getElementById('bReset').addEventListener('click', resetSim);
+  document.getElementById('btnVectors').addEventListener('click', toggleVectorVisibility);
+
+  ['sRiver','sBoat','sAngle'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      const val = parseFloat(document.getElementById(id).value);
+      if(id === 'sRiver') document.getElementById('vRiver').textContent = val.toFixed(1) + ' m/s';
+      if(id === 'sBoat') document.getElementById('vBoat').textContent = val.toFixed(1) + ' m/s';
+      if(id === 'sAngle') document.getElementById('vAngle').textContent = val + '°';
+      updateAll();
+    });
+  });
+
+  document.getElementById('sWidth').addEventListener('input', () => {
+    const val = parseInt(document.getElementById('sWidth').value, 10);
+    document.getElementById('vWidth').textContent = val + ' m';
+    RW = val;
+    rebuildWater();
+    buildBanks();
+    rebuildBankLabels();
+    rebuildDistanceMarkers();
+    buildFlowVisuals();
+    resetSim();
+  });
+}
+
+function onResize(){
+  const ct = document.getElementById('canvas-container');
+  cam.aspect = ct.clientWidth / ct.clientHeight;
+  cam.updateProjectionMatrix();
+  renderer.setSize(ct.clientWidth, ct.clientHeight);
+}
+
+init();
+setModeButtonsActive('linear');
+resetSim();
+</script>
+</body>
+</html>
